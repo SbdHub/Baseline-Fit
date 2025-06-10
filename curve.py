@@ -4,17 +4,17 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
 # Load the baseline data from the CSV file
-baseline_data = pd.read_csv('single_event_data.csv')
+baseline_data = pd.read_csv('nh3.csv')
 
 # Define the domain to fit (bins 100 to 400)
-fit_start_bin, fit_end_bin = 0, 500
+fit_start_bin, fit_end_bin = 0, 400
 
 # Frequency conversion factors
 bin_to_freq = 0.0015287  # MHz per bin
 start_freq = 212.6  # Starting frequency in MHz
 
 # Create an independent variable (frequency in MHz) and extract the relevant data
-x_full_bins = np.arange(500)  # Full range of bins
+x_full_bins = np.arange(400)  # Full range of bins
 x_full_freq = start_freq + x_full_bins * bin_to_freq  # Convert bins to frequency
 
 y_full = baseline_data.iloc[0, 1:501].values  # Full range of data
