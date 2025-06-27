@@ -2,23 +2,24 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+from scipy.stats import chi2
 
 # Load the baseline data from the CSV file
 baseline_data = pd.read_csv('nh3.csv')
 
 # Define the domain to fit (bins 100 to 400)
-fit_start_bin, fit_end_bin = 0, 400
+fit_start_bin, fit_end_bin = 0, 401
 
 # Frequency conversion factors
 bin_to_freq = 0.0015287  # MHz per bin
 start_freq = 212.6  # Starting frequency in MHz
 
 # Create an independent variable (frequency in MHz) and extract the relevant data
-x_full_bins = np.arange(400)  # Full range of bins
+x_full_bins = np.arange(401)  # Full range of bins
 x_full_freq = start_freq + x_full_bins * bin_to_freq  # Convert bins to frequency
 
-y_full = baseline_data.iloc[0, 1:501].values  # Full range of data
-yerr_full = 0.0005  # Assuming a constant error, or replace with an array if errors are variable
+y_full = baseline_data.loc[0, 'ADC_1': 'ADC_401'].values  # Full range of data
+yerr_full = 0.001  # Assuming a constant error, or replace with an array if errors are variable
 
 # Restrict to the domain of interest (bins 100 to 400)
 x_bins = x_full_bins[fit_start_bin:fit_end_bin+1]
@@ -26,7 +27,9 @@ x_freq = x_full_freq[fit_start_bin:fit_end_bin+1]
 y = y_full[fit_start_bin:fit_end_bin+1]
 
 # Define the Baseline function with frequency as input
-def Baseline(f, U, Cknob, eta, trim, Cstray, phi_const):
+#def Baseline(f, U, Cknob, eta, trim, Cstray, phi_const):
+def Baseline(f, U, Cknob, eta, Cstray, phi_const):
+    trim = 25.25
     # Preamble
     circ_consts = (3*10**(-8), 0.35, 619, 50, 10, 0.0343, 4.752*10**(-9), 50, 1.027*10**(-10), 2.542*10**(-7), 0, 0, 0, 0)
     pi = np.pi
@@ -147,15 +150,21 @@ def Baseline(f, U, Cknob, eta, trim, Cstray, phi_const):
 
 # Define initial parameter guesses for curve_fit
 # U=0.37 Cknob=13.6 eta=0.707 trim=25.2 Cstray=2.272 phi_const=1.42
-initial_params = [0.382652652, 13.6565062, 9.85632350e-02, 24.3720560, 400, 265.575865]
+# initial_params = [0.382652652, 13.6565062, 9.85632350e-02, 25.2, 2.272, 265.575865]
+initial_params = [0.382652652, 13.6565062, 9.85632350e-02, 2.272, 265.575865]
 #initial_params = [.5, 13.8, .1, 25, 20, 270]
 
+#print(Baseline(x_freq, *initial_params)) # Baseline function is fine with this initial set of parameters
 
 # Set bounds for the parameters
 #param_bounds = ([.1, 0.01, 0.001, 5, 1e-15, 0],  # Lower bounds
 #                [1.8, 30, 1, 15, 50, 3])  # Upper bounds
-param_bounds = ([.38, 0.01, 0.001, 24.37, 1e-15, 0],  # Lower bounds
-                [0.5, 30, 1, 24.4, 400, 360])  # Upper bounds
+
+
+param_bounds = ([.1, 0.01, 0.001, 1e-13, 0],  # Lower bounds
+                [1, 100, 1, 100, 360])  # Upper bounds
+
+
 # Perform the curve fitting with bounds
 popt, pcov = curve_fit(Baseline, x_freq, y, p0=initial_params, bounds=param_bounds)
 
@@ -166,7 +175,7 @@ print(pcov)
 # Print the optimized parameters
 print("Optimized Parameters:")
 print(popt)
-
+'''
 # Plot the original data and the resulting fit function
 plt.errorbar(x_full_freq, y_full, yerr=yerr_full, fmt='o', markersize=1, label='Data', color='black')  # Plot full data range
 plt.plot(x_freq, Baseline(x_freq, *popt), label='Fit', color='red', linewidth=2)  # Fit for selected domain
@@ -174,4 +183,37 @@ plt.xlabel('Frequency (MHz)')
 plt.ylabel('Dependent Variable')
 plt.legend()
 plt.title('Fit of Data between Frequencies')
+plt.savefig('fit.png')
+plt.show()
+
+'''
+
+
+# Calculate residuals and chi-squared
+residuals = y - Baseline(x_freq, *popt)
+chi_squared = np.sum((residuals / yerr_full) ** 2)
+dof = len(y) - len(popt)
+chi_squared_red = chi_squared / dof
+p_value = 1 - chi2.cdf(chi_squared, dof)
+
+# Print values in terminal
+print(f"Chi-squared: {chi_squared:.2f}")
+print(f"Reduced Chi-squared: {chi_squared_red:.2f}")
+print(f"P-value: {p_value:.4f}")
+
+# Plot with annotation
+plt.errorbar(x_full_freq, y_full, yerr=yerr_full, fmt='o', markersize=1, label='Data', color='black')
+plt.plot(x_freq, Baseline(x_freq, *popt), label='Fit', color='red', linewidth=2)
+plt.xlabel('Frequency (MHz)')
+plt.ylabel('Dependent Variable')
+plt.legend()
+plt.title('Fit of Data between Frequencies')
+
+# Annotate chi² and p-value
+textstr = f"$\\chi^2$ = {chi_squared:.1f}\n$\\chi^2_\\mathrm{{red}}$ = {chi_squared_red:.2f}\n$p$-value = {p_value:.4f}"
+plt.gca().text(0.5, 0.95, textstr, transform=plt.gca().transAxes, fontsize=10,
+               verticalalignment='top', bbox=dict(boxstyle="round", facecolor='white', alpha=0.8))
+
+plt.tight_layout()
+plt.savefig('fit.png')
 plt.show()
